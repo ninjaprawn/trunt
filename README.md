@@ -1,5 +1,4 @@
 # Trunt
-=======
 
 A lazily implemented C preprocessor for the lazy.
 
@@ -8,7 +7,6 @@ Should be able to be extended easily.
 
 
 ## Compiling
-======
 
 `make`
 
