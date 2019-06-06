@@ -305,7 +305,7 @@ int main(int argc, char* argv[]) {
                     if (mapped_file[idx] == ',') {
                         arg_count++;
                         
-                        char* arg_name = calloc(idx - start_idx, 1);
+                        char* arg_name = calloc(idx - start_idx + 1, 1);
                         strncpy(arg_name, mapped_file+start_idx, idx - start_idx);
                         struct trunt_arg* current_arg = new_arg(arg_name);
 
@@ -322,7 +322,7 @@ int main(int argc, char* argv[]) {
 
                 if (mapped_file[idx-1] != '(') {
                     arg_count++;
-                    char* arg_name = calloc(idx - start_idx, 1);
+                    char* arg_name = calloc(idx - start_idx + 1, 1);
                     strncpy(arg_name, mapped_file+start_idx, idx - start_idx);
                     struct trunt_arg* current_arg = new_arg(arg_name);
                     list_append(al, (list_node)current_arg);
