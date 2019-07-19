@@ -267,6 +267,30 @@ int main(int argc, char* argv[]) {
                 idx++;
             }
             idx++;    
+        } else if (!strncmp(&mapped_file[idx], "struct", 6)) {
+            idx += 6;
+            consume_all_whitespace();
+            int start_name = idx;
+            while (mapped_file[idx] != '\n' && mapped_file[idx] != '\t' && mapped_file[idx] != ' ') {
+                idx++;
+            }
+            char* struct_name = calloc(idx - start_name + 1, 1);
+            strncpy(struct_name, &mapped_file[start_name], idx - start_name);
+            printf("Found struct %s!\n", struct_name);
+            consume_all_whitespace();
+            if (mapped_file[idx] == '{') {
+                printf("Standard struct!\n");
+            } else if (!strncmp(&mapped_file[idx], "inherits", 8)) {
+                idx += 8;
+                consume_all_whitespace();
+                start_name = idx;
+                while (mapped_file[idx] != '\n' && mapped_file[idx] != '\t' && mapped_file[idx] != ' ') {
+                    idx++;
+                }
+                char* parent_name = calloc(idx - start_name + 1, 1);
+                strncpy(parent_name, &mapped_file[start_name], idx - start_name);
+                printf("Struct inherits %s\n", parent_name);
+            }
         } else if (mapped_file[idx] == '!') {
             segment_end = idx;
             idx++;
