@@ -9,6 +9,31 @@
 
 #include "linked_list.h"
 
+// Defines a structure
+struct trunt_structure {
+    struct trunt_structure* next;
+    char* name;
+    char* properties;
+};
+
+struct trunt_structure* new_structure(char* name, char* properties) {
+    struct trunt_structure* s = malloc(sizeof(struct trunt_structure));
+    s->next = NULL;
+    s->name = name;
+    s->properties = properties;
+    return s;
+}
+
+char* struct_to_string(struct trunt_structure* s) {
+    char* ret = calloc(7 + strlen(s->name) + 3 + strlen(s->properties) + 2 + 1, 1);
+    strcat(ret, "struct ");
+    strcat(ret, s->name);
+    strcat(ret, " {\n");
+    strcat(ret, s->properties);
+    strcat(ret, "} ");
+    return ret;
+}
+
 // Defines a string "segment" for concatenation later
 struct trunt_segment {
     struct trunt_segment* next;
@@ -231,9 +256,11 @@ int main(int argc, char* argv[]) {
  
     char* mapped_file = mmap(NULL, file_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FILE, fd, 0);
 
+    // Structures
+    linked_list structures = list_create();
 
+    // Text segments
     linked_list segments = list_create();
-
     uint32_t segment_start = 0;
     uint32_t segment_end = 0;
 
@@ -242,23 +269,17 @@ int main(int argc, char* argv[]) {
         consume_all_whitespace();
         if (mapped_file[idx] == '/') {
             idx++;
-            if (mapped_file[idx] == '*') {
-                //printf("Multiline comment\n");
+            if (mapped_file[idx] == '*') { // Multiline comment
                 int old_idx = idx - 1;
                 idx++;
                 while (!(mapped_file[idx] == '*' && mapped_file[idx+1] == '/')) {
                     idx++;
                 }
                 idx += 2;
-                //char* s = malloc(idx - old_idx + 1);
-                //strncpy(s, mapped_file+old_idx, idx-old_idx);
-                //printf("%s\n", s);
-            } else if (mapped_file[idx] == '/') {
-                //printf("Single line comment\n");
+            } else if (mapped_file[idx] == '/') { // Single line comment
                 while (mapped_file[idx++] != '\n') {};
             }
-        } else if (mapped_file[idx] == '\"') {
-            //printf("String!\n");
+        } else if (mapped_file[idx] == '\"') { // String
             idx++;
             while (mapped_file[idx] != '\"') {
                 if (mapped_file[idx] == '\\' && mapped_file[idx+1] == '\"') {
@@ -267,29 +288,86 @@ int main(int argc, char* argv[]) {
                 idx++;
             }
             idx++;    
-        } else if (!strncmp(&mapped_file[idx], "struct", 6)) {
+        } else if (!strncmp(&mapped_file[idx], "struct", 6)) { // Struct
+            int start_def = idx;
             idx += 6;
             consume_all_whitespace();
+
+            // Get the struct name
             int start_name = idx;
             while (mapped_file[idx] != '\n' && mapped_file[idx] != '\t' && mapped_file[idx] != ' ') {
                 idx++;
             }
             char* struct_name = calloc(idx - start_name + 1, 1);
             strncpy(struct_name, &mapped_file[start_name], idx - start_name);
-            printf("Found struct %s!\n", struct_name);
             consume_all_whitespace();
-            if (mapped_file[idx] == '{') {
-                printf("Standard struct!\n");
-            } else if (!strncmp(&mapped_file[idx], "inherits", 8)) {
+
+            // Check if there is any inheritance required
+            char* parent_name = NULL;
+            if (!strncmp(&mapped_file[idx], "inherits", 8)) {
                 idx += 8;
                 consume_all_whitespace();
                 start_name = idx;
                 while (mapped_file[idx] != '\n' && mapped_file[idx] != '\t' && mapped_file[idx] != ' ') {
                     idx++;
                 }
-                char* parent_name = calloc(idx - start_name + 1, 1);
+                parent_name = calloc(idx - start_name + 1, 1);
                 strncpy(parent_name, &mapped_file[start_name], idx - start_name);
-                printf("Struct inherits %s\n", parent_name);
+                consume_all_whitespace();
+            }
+
+            if (mapped_file[idx] == '{') {
+                idx++;
+                while (mapped_file[idx] != '\n') { idx++; }
+                idx++;
+                int start_struct = idx;
+                int brace_count = 1;
+                while (brace_count != 0) {
+                    if (mapped_file[idx] == '{') {
+                        brace_count++;
+                    } else if (mapped_file[idx] == '}') {
+                        brace_count--;
+                    }
+                    idx++;
+                }
+                char* struct_def = calloc(idx - start_struct, 1);
+                strncpy(struct_def, &mapped_file[start_struct], idx - start_struct - 1);
+                int end_def = idx + 1;
+
+                if (parent_name == NULL) { // If its just a regular struct
+                    struct trunt_structure* current_structure = new_structure(struct_name, struct_def);
+                    list_append(structures, (list_node)current_structure);
+                } else {
+                    struct trunt_structure* parent_structure = (struct trunt_structure*)structures->head;
+                    while (parent_structure != NULL) {
+                        if (!strncmp(parent_structure->name, parent_name, strlen(parent_name))) {
+                            break;
+                        }
+                        parent_structure = parent_structure->next;
+                    }
+
+                    struct trunt_structure* current_structure = NULL;
+                    if (parent_structure != NULL) {
+                        char* new_struct_def = calloc(strlen(struct_def) + strlen(parent_structure->properties) + 1, 1);
+                        strcat(new_struct_def, parent_structure->properties);
+                        strcat(new_struct_def, struct_def);
+
+                        current_structure = new_structure(struct_name, new_struct_def);
+                        list_append(structures, (list_node)current_structure);
+                    } else {
+                        current_structure = new_structure(struct_name, struct_def);
+                        list_append(structures, (list_node)current_structure);
+                    }
+
+                    struct trunt_segment* s = new_segment(mapped_file + segment_start, start_def - segment_start);
+                    list_append(segments, (list_node)s);
+
+                    char* body = struct_to_string(current_structure);
+                    s = new_segment(body, strlen(body));
+                    list_append(segments, (list_node)s);
+                    
+                    segment_start = end_def;
+                }
             }
         } else if (mapped_file[idx] == '!') {
             segment_end = idx;
