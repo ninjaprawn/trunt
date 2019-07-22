@@ -1,1 +1,3 @@
 bin/*
+.vscode/*
+trunt.code-workspace
